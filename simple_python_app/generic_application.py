@@ -45,6 +45,7 @@ class GenericApplication:
             "logging_config_filepath",
             "logging_config_search_paths",
             "logging_config_search_filenames",
+            "logging_default_config_filepath",
             "logging_default_format",
             "logging_default_date_format",
             "logging_logfile_output_dir",
@@ -67,6 +68,7 @@ class GenericApplication:
         logging_config_filepath: None | Path = None,
         logging_config_search_paths: None | List[Path] = None,
         logging_config_search_filenames: None | List[str] = None,
+        logging_default_config_filepath: None | Path = None,
         logging_default_format: None | str = None,
         logging_default_date_format: None | str = None,
         logging_logfile_output_dir: None | Path = None,
@@ -84,6 +86,7 @@ class GenericApplication:
             logging_config_filepath=logging_config_filepath,
             logging_config_search_paths=logging_config_search_paths,
             logging_config_search_filenames=logging_config_search_filenames,
+            logging_default_config_filepath=logging_default_config_filepath,
             logging_default_format=logging_default_format,
             logging_default_date_format=logging_default_date_format,
             logging_logfile_output_dir=logging_logfile_output_dir,
@@ -100,6 +103,10 @@ class GenericApplication:
         self._subparser = None
         self._add_arguments_method_available = hasattr(self, "add_arguments") and callable(self.add_arguments)
         self._run_method_available = hasattr(self, "run") and callable(self.run)
+
+        self._custom_init_stage_one_methods: List[Callable] = []
+        self._custom_init_stage_two_methods: List[Callable] = []
+        self._custom_init_stage_three_methods: List[Callable] = []
 
         self.application_name = application_name
         self.version = version
@@ -278,7 +285,7 @@ class GenericApplication:
     def __init_default_logging(self) -> None:
         forced_log_level = self.__get_log_level()
         logfile_filepath = self.__get_logfile_filepath()
-        default_logging_config_filepath = FILE_DIR / "resources/default_logging_config.yaml"
+        default_logging_config_filepath = self.config.logging_default_config_filepath if self.config.logging_default_config_filepath else FILE_DIR / "resources/default_logging_config.yaml"
 
         init_logging(default_logging_config_filepath, logfile_filepath=logfile_filepath, force_log_level=forced_log_level)
         self.logging_config_type = GenericApplication.LoggingConfigType.DEFAULT
@@ -326,6 +333,9 @@ class GenericApplication:
 
         self.__init_argparse(argv)
 
+        for custom_init_stage_one_method in self._custom_init_stage_one_methods:
+            custom_init_stage_one_method()
+
     def __init_stage_two(self) -> None:
         """
         Init Stage Two:
@@ -345,6 +355,9 @@ class GenericApplication:
 
         if self.config.application_config_init_enabled:
             self.__init_application_config()
+
+        for custom_init_stage_two_method in self._custom_init_stage_two_methods:
+            custom_init_stage_two_method()
 
     def __init_stage_three(self) -> None:
         """
@@ -416,15 +429,27 @@ class GenericApplication:
         logm.debug("  ]")
         logm.debug("- application config search filenames = %s", self.application_config_search_filenames)
 
-        logm.debug("********************************************")
-        logm.debug("Configuration done! Passing control to user code!")
-        logm.debug("============================================")
+        for custom_init_stage_three_method in self._custom_init_stage_three_methods:
+            custom_init_stage_three_method()
+
+    def add_custom_init_stage_one(self, custom_init_stage_method: Callable[[], None]) -> None:
+        self._custom_init_stage_one_methods.append(custom_init_stage_method)
+
+    def add_custom_init_stage_two(self, custom_init_stage_method: Callable[[], None]) -> None:
+        self._custom_init_stage_two_methods.append(custom_init_stage_method)
+
+    def add_custom_init_stage_three(self, custom_init_stage_method: Callable[[], None]) -> None:
+        self._custom_init_stage_three_methods.append(custom_init_stage_method)
 
     def start(self, argv: List[str] | None = None) -> int:
         try:
             self.__init_stage_one(argv)
             self.__init_stage_two()
             self.__init_stage_three()
+
+            logm.debug("********************************************")
+            logm.debug("      Passing control to user code!")
+            logm.debug("============================================")
 
             if self._run_method_available:
                 self.logm.info("%s (version=%s) started!", self.application_name, self.version)
