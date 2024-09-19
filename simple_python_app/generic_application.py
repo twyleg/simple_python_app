@@ -212,7 +212,7 @@ class GenericApplication:
             if self._add_arguments_method_available:
                 self.add_arguments(self._arg_parser)  # type: ignore[attr-defined]
 
-            self._args = self._arg_parser.parse_args(argv)
+            self._args, _ = self._arg_parser.parse_known_args(argv)
         except SystemExit as e:
             self.__exit(error=False)
         except BaseException as e:
