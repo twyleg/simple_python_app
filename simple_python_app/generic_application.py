@@ -285,7 +285,9 @@ class GenericApplication:
     def __init_default_logging(self) -> None:
         forced_log_level = self.__get_log_level()
         logfile_filepath = self.__get_logfile_filepath()
-        default_logging_config_filepath = self.config.logging_default_config_filepath if self.config.logging_default_config_filepath else FILE_DIR / "resources/default_logging_config.yaml"
+        default_logging_config_filepath = (
+            self.config.logging_default_config_filepath if self.config.logging_default_config_filepath else FILE_DIR / "resources/default_logging_config.yaml"
+        )
 
         init_logging(default_logging_config_filepath, logfile_filepath=logfile_filepath, force_log_level=forced_log_level)
         self.logging_config_type = GenericApplication.LoggingConfigType.DEFAULT
