@@ -68,8 +68,10 @@ class Command:
                 self.add_subcommand(next_command)
             return self.subcommands[next_command].add_subcommand(remaining_commands, handler)
 
+
 class RootCommand(Command):
     pass
+
 
 # class RootCommand(Command):
 #     def __init__(self):

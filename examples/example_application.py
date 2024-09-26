@@ -18,14 +18,14 @@ class SimpleExampleApplication(GenericApplication):
         )
 
     def add_arguments(self, argparser: argparse.ArgumentParser):
-        root_command = RootCommand(argparser, self. handle_root_command)
+        root_command = RootCommand(argparser, self.handle_root_command)
         count_up_command = root_command.add_subcommand("count up", self.handle_count_up)
         count_down_command = root_command.add_subcommand("count down", self.handle_count_down)
 
         for command in [count_up_command, count_down_command]:
-            command.parser.add_argument('--start', type=int, default=0, help="Counter start")
-            command.parser.add_argument('--end', type=int, default=None, help="Counter end (infinite by default)")
-            command.parser.add_argument('--delay', type=float, default=1.0, help="Delay in seconds (float)")
+            command.parser.add_argument("--start", type=int, default=0, help="Counter start")
+            command.parser.add_argument("--end", type=int, default=None, help="Counter end (infinite by default)")
+            command.parser.add_argument("--delay", type=float, default=1.0, help="Delay in seconds (float)")
 
     def handle_root_command(self, args: argparse.Namespace) -> int:
         self.logm.info("Root command. Nothing to do!")
