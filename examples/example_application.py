@@ -1,23 +1,20 @@
-# Copyright (C) 2024 twyleg
 import argparse
+import sys
 import time
 from pathlib import Path
 
 from simple_python_app.generic_application import GenericApplication
-from simple_python_app.subcommands import RootCommand
+from simple_python_app.subcommands import Command, RootCommand
 
 FILE_DIR = Path(__name__).parent
 
 
-class SimpleCounterAppExampleApplication(GenericApplication):
+class SimpleExampleApplication(GenericApplication):
     def __init__(self):
         super().__init__(
-            application_name="simple_counter_app_example",
+            application_name="simple_example_application",
             version="0.0.1",
-            application_config_schema_filepath=FILE_DIR / "resources/config/simple_counter_app_config_schema.json",
-            application_config_filepath=FILE_DIR / "resources/config/simple_counter_app_config.json",
-            logging_config_filepath=FILE_DIR / "resources/config/logging.yaml",
-            logging_logfile_output_dir=FILE_DIR / "logs/",
+            application_config_schema_filepath=FILE_DIR / "simple_example_application_config_schema.json",
         )
 
     def add_arguments(self, argparser: argparse.ArgumentParser):
@@ -59,5 +56,5 @@ class SimpleCounterAppExampleApplication(GenericApplication):
 
 
 if __name__ == "__main__":
-    simple_counter_app_example_application = SimpleCounterAppExampleApplication()
-    simple_counter_app_example_application.start()
+    simple_example_application = SimpleExampleApplication()
+    simple_example_application.start()
