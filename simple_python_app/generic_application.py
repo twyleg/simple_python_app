@@ -98,7 +98,7 @@ class GenericApplication:
             application_config_search_filenames=application_config_search_filenames,
         )
 
-        self._arg_parser = argparse.ArgumentParser(usage=f"{application_name} [<args>] <command>")
+        self._arg_parser = argparse.ArgumentParser(usage=f"{application_name}")
         self._args: None | argparse.Namespace = None
         self._subparser = None
         self._add_arguments_method_available = hasattr(self, "add_arguments") and callable(self.add_arguments)
