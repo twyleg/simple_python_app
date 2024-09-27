@@ -29,7 +29,8 @@ setup(
     include_package_data=True,
     install_requires=[
         "pyyaml~=6.0.2",
-        "jsonschema~=4.20.0"
+        "jsonschema~=4.20.0",
+        "prompt-toolkit~=3.0.48",
     ],
     entry_points={},
 )
