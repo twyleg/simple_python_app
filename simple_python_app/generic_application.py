@@ -41,6 +41,7 @@ class GenericApplication:
         class HelpRequested(Exception):
             pass
 
+        # fmt: off
         def __init__(self,
                      option_strings,
                      dest=argparse.SUPPRESS,
@@ -51,7 +52,9 @@ class GenericApplication:
                 dest=dest,
                 default=default,
                 nargs=0,
-                help=help)
+                help=help
+            )
+            # fmt: on
 
         def __call__(self, parser, namespace, values, option_string=None):
             parser.print_help()
@@ -62,6 +65,7 @@ class GenericApplication:
         class VersionRequested(Exception):
             pass
 
+        # fmt: off
         def __init__(self,
                      option_strings,
                      version=None,
@@ -75,7 +79,9 @@ class GenericApplication:
                 dest=dest,
                 default=default,
                 nargs=0,
-                help=help)
+                help=help
+            )
+            # fmt: on
             self.version = version
 
         def __call__(self, parser, namespace, values, option_string=None):
@@ -344,8 +350,7 @@ class GenericApplication:
                     handler["filename"] = logfile_filepath
 
     @classmethod
-    def __init_logging(cls, config_filepath: Path, logfile_filepath: Path | None = None,
-                     force_log_level: None | int = None) -> None:
+    def __init_logging(cls, config_filepath: Path, logfile_filepath: Path | None = None, force_log_level: None | int = None) -> None:
         with open(config_filepath, "r") as f:
             d = yaml.safe_load(f)
 

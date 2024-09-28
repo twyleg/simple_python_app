@@ -74,12 +74,14 @@ class Command:
 
             # Handle help manually to avoid automatic exit when not desired (e.g. in shell mode)
             parser = self.subparser.add_parser(command, add_help=False, description=description, help=help)
+            # fmt: off
             parser.add_argument(
                 "-h",
                 "--help",
                 help="Show help",
                 action=GenericApplication.CustomHelpAction
             )
+            # fmt: on
 
             subcommand = Command(parser, handler)
             self.subcommands[command] = subcommand
