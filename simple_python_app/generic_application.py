@@ -1,10 +1,14 @@
 # Copyright (C) 2024 twyleg
 import getpass
+import json
 import logging
+import logging.config
 import argparse
 import os
 import platform
 import sys
+import jsonschema
+import yaml
 from collections import namedtuple
 from importlib import metadata
 from datetime import datetime
@@ -12,11 +16,7 @@ from pathlib import Path
 from enum import Enum
 from typing import Callable, Any, Dict, List, Tuple
 
-import simple_python_app.application_config
 from simple_python_app import __version__
-from simple_python_app.helper import find_file
-from simple_python_app.logging import init_logging
-from simple_python_app.application_config import init_application_config, ApplicationConfig
 
 
 logm = logging.getLogger(__name__)
@@ -25,7 +25,7 @@ FILE_DIR = Path(__file__).parent
 
 
 class GenericApplication:
-    ApplicationConfig = simple_python_app.application_config.ApplicationConfig
+    ApplicationConfig = Dict[str, Any]
 
     class LoggingConfigType(Enum):
         DEFAULT = 1
@@ -35,6 +35,57 @@ class GenericApplication:
         CLI_ARG = 1
         EXPLICIT = 2
         SEARCH = 3
+
+    class CustomHelpAction(argparse.Action):
+
+        class HelpRequested(Exception):
+            pass
+
+        def __init__(self,
+                     option_strings,
+                     dest=argparse.SUPPRESS,
+                     default=argparse.SUPPRESS,
+                     help=None):
+            super().__init__(
+                option_strings=option_strings,
+                dest=dest,
+                default=default,
+                nargs=0,
+                help=help)
+
+        def __call__(self, parser, namespace, values, option_string=None):
+            parser.print_help()
+            raise self.HelpRequested
+
+    class CustomVersionAction(argparse.Action):
+
+        class VersionRequested(Exception):
+            pass
+
+        def __init__(self,
+                     option_strings,
+                     version=None,
+                     dest=argparse.SUPPRESS,
+                     default=argparse.SUPPRESS,
+                     help=None):
+            if help is None:
+                help = "show program's version number and exit"
+            super().__init__(
+                option_strings=option_strings,
+                dest=dest,
+                default=default,
+                nargs=0,
+                help=help)
+            self.version = version
+
+        def __call__(self, parser, namespace, values, option_string=None):
+            version = self.version
+            if version is None:
+                version = parser.version
+            formatter = parser._get_formatter()
+            formatter.add_text(version)
+            parser._print_message(formatter.format_help(), sys.stdout)
+            raise self.VersionRequested
 
     Config = namedtuple(
         "Config",
@@ -98,7 +149,7 @@ class GenericApplication:
             application_config_search_filenames=application_config_search_filenames,
         )
 
-        self._arg_parser = argparse.ArgumentParser(usage=f"{application_name}")
+        self._arg_parser = argparse.ArgumentParser(prog=f"{application_name}", exit_on_error=False, add_help=False)
         self._args: None | argparse.Namespace = None
         self._subparser = None
         self._add_arguments_method_available = hasattr(self, "add_arguments") and callable(self.add_arguments)
@@ -125,7 +176,7 @@ class GenericApplication:
             if (self.config.application_config_search_filenames)
             else self.__get_application_config_default_search_filenames()
         )
-        self.application_config: None | ApplicationConfig = None
+        self.application_config: None | GenericApplication.ApplicationConfig = None
 
         self.logging_logfile_filepath: None | Path = None
         self.logging_config_type: None | GenericApplication.LoggingConfigType = None
@@ -170,11 +221,20 @@ class GenericApplication:
 
     def __init_argparse(self, argv: List[str] | None) -> None:
         # fmt: off
+
+        # Handle help manually to avoid automatic exit when not desired (e.g. in shell mode)
+        self._arg_parser.add_argument(
+            "-h",
+            "--help",
+            help="Show help",
+            action=self.CustomHelpAction
+        )
+
         self._arg_parser.add_argument(
             "-v",
             "--version",
             help="Show version and exit",
-            action="version",
+            action=self.CustomVersionAction,
             version=self.version,
         )
 
@@ -213,7 +273,11 @@ class GenericApplication:
                 self.add_arguments(self._arg_parser)  # type: ignore[attr-defined]
 
             self._args, _ = self._arg_parser.parse_known_args(argv)
-        except SystemExit as e:
+        except argparse.ArgumentError as e:
+            # Handle exit on error manually to avoid automatic exit in shell mode
+            logm.error(e)
+            self.__exit(error=True)
+        except (SystemExit, self.CustomHelpAction.HelpRequested, self.CustomVersionAction.VersionRequested):
             self.__exit(error=False)
         except BaseException as e:
             self.__init_default_logging()
@@ -251,6 +315,48 @@ class GenericApplication:
 
         return logfile_output_dir / logfile_filename
 
+    @classmethod
+    def find_file(cls, search_paths: List[Path], filenames: List[str]) -> Path | None:
+        for search_path in search_paths:
+            for filename in filenames:
+                potential_logging_config_filepath = search_path / filename
+                if potential_logging_config_filepath.exists():
+                    return potential_logging_config_filepath
+        return None
+
+    @classmethod
+    def __set_log_level(cls, config_dict: Dict[str, Any], log_level: int) -> None:
+        level_name = logging.getLevelName(log_level)
+        if "handlers" in config_dict:
+            for handler in config_dict["handlers"].values():
+                handler["level"] = level_name
+        if "loggers" in config_dict:
+            for logger in config_dict["loggers"].values():
+                logger["level"] = level_name
+        if "root" in config_dict:
+            config_dict["root"]["level"] = level_name
+
+    @classmethod
+    def __set_file_handler_filename(cls, config_dict: Dict[str, Any], logfile_filepath: Path) -> None:
+        if "handlers" in config_dict:
+            for handler in config_dict["handlers"].values():
+                if "class" in handler and handler["class"] == "logging.FileHandler":
+                    handler["filename"] = logfile_filepath
+
+    @classmethod
+    def __init_logging(cls, config_filepath: Path, logfile_filepath: Path | None = None,
+                     force_log_level: None | int = None) -> None:
+        with open(config_filepath, "r") as f:
+            d = yaml.safe_load(f)
+
+            if force_log_level:
+                cls.__set_log_level(d, force_log_level)
+
+            if logfile_filepath:
+                cls.__set_file_handler_filename(d, logfile_filepath)
+
+            logging.config.dictConfig(d)
+
     def __init_custom_logging(self) -> None:
         def find_logging_config_filepath() -> Tuple[Path | None, GenericApplication.ConfigFilepathSource]:
             if self._args.logging_config:  # type: ignore[union-attr]
@@ -259,7 +365,7 @@ class GenericApplication:
                 return self.config.logging_config_filepath, GenericApplication.ConfigFilepathSource.EXPLICIT
             else:
                 return (
-                    find_file(self.logging_config_search_paths, self.logging_config_search_filenames),
+                    self.find_file(self.logging_config_search_paths, self.logging_config_search_filenames),
                     GenericApplication.ConfigFilepathSource.SEARCH,
                 )
 
@@ -269,7 +375,7 @@ class GenericApplication:
 
         if logging_custom_config_filepath:
             try:
-                init_logging(logging_custom_config_filepath, logfile_filepath=logfile_filepath, force_log_level=forced_log_level)
+                self.__init_logging(logging_custom_config_filepath, logfile_filepath=logfile_filepath, force_log_level=forced_log_level)
                 self.logging_config_type = GenericApplication.LoggingConfigType.CUSTOM
                 self.logging_logfile_filepath = logfile_filepath
                 self.logging_config_filepath = logging_custom_config_filepath
@@ -289,7 +395,7 @@ class GenericApplication:
             self.config.logging_default_config_filepath if self.config.logging_default_config_filepath else FILE_DIR / "resources/default_logging_config.yaml"
         )
 
-        init_logging(default_logging_config_filepath, logfile_filepath=logfile_filepath, force_log_level=forced_log_level)
+        self.__init_logging(default_logging_config_filepath, logfile_filepath=logfile_filepath, force_log_level=forced_log_level)
         self.logging_config_type = GenericApplication.LoggingConfigType.DEFAULT
         self.logging_logfile_filepath = logfile_filepath
         self.logging_config_filepath = default_logging_config_filepath
@@ -302,7 +408,7 @@ class GenericApplication:
                 return self.config.application_config_filepath, GenericApplication.ConfigFilepathSource.EXPLICIT
             else:
                 return (
-                    find_file(self.application_config_search_paths, self.application_config_search_filenames),
+                    self.find_file(self.application_config_search_paths, self.application_config_search_filenames),
                     GenericApplication.ConfigFilepathSource.SEARCH,
                 )
 
@@ -310,7 +416,16 @@ class GenericApplication:
 
         if self.application_config_filepath:
             try:
-                self.application_config = init_application_config(self.application_config_filepath, self.config.application_config_schema_filepath)
+                with open(self.application_config_filepath) as config_file:
+                    config = json.load(config_file)
+
+                    if self.config.application_config_schema_filepath:
+                        with open(self.config.application_config_schema_filepath) as json_schema_file:
+                            config_schema = json.load(json_schema_file)
+                            jsonschema.validate(instance=config, schema=config_schema)
+
+                    self.application_config = config
+
             except BaseException as e:
                 logm.error("Error reading application config (%s):", self.application_config_filepath)
                 logm.error("Application config filepath source (%s):", self.application_config_filepath_source)

@@ -21,8 +21,20 @@ class SubcommandApplicationCounterExample(SubcommandApplication):
         )
 
     def add_arguments(self, argparser: argparse.ArgumentParser):
-        count_up_command = self.add_subcommand("count up", self.handle_count_up)
-        count_down_command = self.add_subcommand("count down", self.handle_count_down)
+        # fmt: off
+        count_up_command = self.add_subcommand(
+            command="count up",
+            help="Counter going upwards",
+            description="Counter going upwards with multiple parameters.",
+            handler=self.handle_count_up
+        )
+        count_down_command = self.add_subcommand(
+            command="count down",
+            help="Counter going downwards",
+            description="Counter going downwards with multiple parameters.",
+            handler=self.handle_count_down
+        )
+        # fmt: on
 
         for command in [count_up_command, count_down_command]:
             command.parser.add_argument("--start", type=int, default=0, help="Counter start")

@@ -3,10 +3,10 @@ import argparse
 import logging
 import traceback
 from argparse import ArgumentParser, Namespace, _SubParsersAction
-from typing import Dict, Union, Callable
+from typing import Dict, Union, Callable, List
 
 from prompt_toolkit import PromptSession
-from prompt_toolkit.completion import NestedCompleter
+from prompt_toolkit.completion import NestedCompleter, WordCompleter
 from prompt_toolkit.history import InMemoryHistory
 from prompt_toolkit.styles import Style
 
@@ -21,7 +21,7 @@ class Command:
     class SubcommandNotAvailableError(Exception):
         pass
 
-    CommandDict = Dict[str, Union[None, "CommandDict"]] | None
+    CommandDict = Dict[str, Union[None, "CommandDict"]] | None | WordCompleter
     Handler = Callable[[Namespace], int]
 
     def __init__(self, parser: ArgumentParser, handler: Handler | None = None):
@@ -37,11 +37,19 @@ class Command:
     def default_handler(self, args: Namespace) -> None:
         logm.error("Function not yet implemented!")
 
-    def commands_to_dict(self) -> CommandDict:
-        if len(self.subcommands):
-            return {subcommand_name: subcommand.commands_to_dict() for subcommand_name, subcommand in self.subcommands.items()}
-        else:
-            return None
+    def commands_to_dict(self) -> CommandDict | WordCompleter:
+
+        def get_argument_list() -> List[str]:
+            arguments: List[str] = []
+            for action in self.parser._actions:
+                for option_string in action.option_strings:
+                    arguments.append(option_string)
+            return arguments
+
+        command_dict = {subcommand_name: subcommand.commands_to_dict() for subcommand_name, subcommand in self.subcommands.items()}
+        argument_dict = {argument: None for argument in get_argument_list()}
+        merged_dict = command_dict | argument_dict
+        return merged_dict if len(merged_dict) else None
 
     def find_subcommand(self, command: str) -> "Command":
         command_chain = command.split(" ")
@@ -56,7 +64,7 @@ class Command:
                 return self.subcommands[next_command].find_subcommand(remaining_commands)
         raise Command.SubcommandNotAvailableError()
 
-    def add_subcommand(self, command: str, handler: Handler | None = None) -> "Command":
+    def add_subcommand(self, command: str, help: str = "", description: str = "", handler: Handler | None = None) -> "Command":
         command_chain = command.split(" ")
 
         if len(command_chain) == 1:
@@ -64,7 +72,15 @@ class Command:
             if self.subparser is None:
                 self.subparser = self.parser.add_subparsers(required=self.handler is None, title="subcommands")
 
-            parser = self.subparser.add_parser(command)
+            # Handle help manually to avoid automatic exit when not desired (e.g. in shell mode)
+            parser = self.subparser.add_parser(command, add_help=False, description=description, help=help)
+            parser.add_argument(
+                "-h",
+                "--help",
+                help="Show help",
+                action=GenericApplication.CustomHelpAction
+            )
+
             subcommand = Command(parser, handler)
             self.subcommands[command] = subcommand
             return subcommand
@@ -74,7 +90,7 @@ class Command:
             remaining_commands = " ".join(command_chain[1:])
             if next_command not in self.subcommands:
                 self.add_subcommand(next_command)
-            return self.subcommands[next_command].add_subcommand(remaining_commands, handler)
+            return self.subcommands[next_command].add_subcommand(remaining_commands, help, description, handler)
 
 
 class RootCommand(Command):
@@ -112,7 +128,7 @@ class SubcommandApplication(GenericApplication):
         while True:
             try:
                 subcommand_string = session.prompt(prompt_fragments, style=prompt_style)  # type: ignore
-            except KeyboardInterrupt as e:
+            except (KeyboardInterrupt, EOFError):
                 logm.info("Exiting...")
                 return 0
 
@@ -125,12 +141,14 @@ class SubcommandApplication(GenericApplication):
                     logm.info("Command aborted...")
                 except Command.SubcommandNotAvailableError as e:
                     print(f"Command unavailable: '{subcommand_string}'")
-                except Exception as e:
+                except (GenericApplication.CustomHelpAction.HelpRequested, GenericApplication.CustomVersionAction.VersionRequested):
+                    pass
+                except BaseException as e:
                     logm.error("%s: %s", e.__class__.__name__, e)
                     logm.debug(traceback.format_exc())
 
-    def add_subcommand(self, command: str, handler: Command.Handler) -> Command:
-        return self.root_command.add_subcommand(command, handler)
+    def add_subcommand(self, command: str, help: str, description: str, handler: Command.Handler) -> Command:
+        return self.root_command.add_subcommand(command, help, description, handler)
 
     def run(self, args: argparse.Namespace):
         return args.handler(args)

@@ -9,8 +9,6 @@ from logging import ERROR, WARNING, INFO, DEBUG
 
 from pathlib import Path
 
-import simple_python_app.logging
-import simple_python_app.application_config
 from simple_python_app.generic_application import GenericApplication
 
 from fixtures import valid_custom_logging_config, project_dir, print_tmp_path, valid_custom_logging_config_with_alternative_name_in_alternative_directory
