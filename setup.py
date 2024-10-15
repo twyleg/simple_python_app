@@ -33,6 +33,7 @@ setup(
         "jsonschema~=4.20.0",
         "types-jsonschema~=4.23.0.20240813",
         "prompt-toolkit~=3.0.48",
+        "types-colorama~=0.4.15.20240311",
     ],
     entry_points={},
 )
