@@ -587,7 +587,7 @@ class GenericApplication:
             logm.debug("============================================")
 
             if self._run_method_available:
-                if not self._args.quiet:
+                if not self._args.quiet:  # type: ignore[union-attr]
                     self.logm.info("%s (version=%s) started!", self.application_name, self.version)
                 ret = self.run(self._args)  # type: ignore[attr-defined]
                 return ret if ret else 0
