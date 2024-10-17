@@ -42,7 +42,7 @@ def log_file_contains_string(filepath: Path, string: str) -> bool:
 
 def log_file_contains_test_log_line_on_levels(log_file_filepath: Path, levels: List[int]) -> bool:
     for level in levels:
-        if not log_file_contains_string(log_file_filepath, f"\[{logging.getLevelName(level)}\]\[test_application\]: test log line"):
+        if not log_file_contains_string(log_file_filepath, f"\\[{logging.getLevelName(level)}\\]\\[test_application\\]: test log line"):
             return False
     return True
 

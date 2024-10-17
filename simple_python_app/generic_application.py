@@ -247,7 +247,14 @@ class GenericApplication:
         self._arg_parser.add_argument(
             "-vv",
             "--verbose",
-            help="Run with verbose logging (debug level).",
+            help="Run with verbose logging (debug level). Incompatible with -q/--quiet!",
+            action="store_true"
+        )
+
+        self._arg_parser.add_argument(
+            "-q",
+            "--quiet",
+            help="Run quietly without unnecessary outputs. Incompatible with -v/--verbose!",
             action="store_true"
         )
 
@@ -279,15 +286,21 @@ class GenericApplication:
                 self.add_arguments(self._arg_parser)  # type: ignore[attr-defined]
 
             self._args, _ = self._arg_parser.parse_known_args(argv)
+
+            if self._args.verbose and self._args.quiet:
+                raise argparse.ArgumentError(None, "-v/--verbose and -q/--quiet are incompatible!")
+
         except argparse.ArgumentError as e:
             # Handle exit on error manually to avoid automatic exit in shell mode
+            self.__init_default_logging()
+            logm.error("Error during argument parsing:")
             logm.error(e)
             self.__exit(error=True)
         except (SystemExit, self.CustomHelpAction.HelpRequested, self.CustomVersionAction.VersionRequested):
             self.__exit(error=False)
         except BaseException as e:
             self.__init_default_logging()
-            logm.error('Error when running user "add_arguments()" method:', self.config.logging_config_filepath)
+            logm.error('Error during user "add_arguments()" method:', self.config.logging_config_filepath)
             logm.error(e)
             self.__exit(error=True)
 
@@ -574,11 +587,15 @@ class GenericApplication:
             logm.debug("============================================")
 
             if self._run_method_available:
-                self.logm.info("%s (version=%s) started!", self.application_name, self.version)
+                if not self._args.quiet:  # type: ignore[union-attr]
+                    self.logm.info("%s (version=%s) started!", self.application_name, self.version)
                 ret = self.run(self._args)  # type: ignore[attr-defined]
                 return ret if ret else 0
             else:
                 logm.error('No "run(args)" method provided. Exiting!')
+        except KeyboardInterrupt as e:
+            logm.debug("Interrupted by user. Exiting...")
+            return 0
         except SystemExit as e:
             ret = e.code
             if ret is int:
