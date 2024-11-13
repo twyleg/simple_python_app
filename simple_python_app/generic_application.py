@@ -598,7 +598,7 @@ class GenericApplication:
             return 0
         except SystemExit as e:
             ret = e.code
-            if ret is int:
+            if isinstance(ret, int):
                 return ret
         except BaseException as e:
             logm.exception(e)
